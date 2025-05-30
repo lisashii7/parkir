@@ -8,7 +8,7 @@ $query = $conn->query("
     JOIN parkir_slots s ON b.slot_id = s.id
 ");
 
-// Tambah data slot parkir
+// Tambah data slot parki
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $lokasi = $_POST['lokasi'];
     $conn->prepare("INSERT INTO parkir_slots (lokasi) VALUES (?)")->execute([$lokasi]);

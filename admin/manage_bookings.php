@@ -1,6 +1,6 @@
 <?php
 include '../config/db.php';
-
+//amil data dari database
 $query = $conn->query("
     SELECT b.booking_id, b.user_id, u.username, b.slot_id, s.lokasi, b.waktu_booking, b.waktu_mulai, b.waktu_selesai, b.status, s.jenis
     FROM bookings b
@@ -8,51 +8,6 @@ $query = $conn->query("
     JOIN parkir_slots s ON b.slot_id = s.id
 ");
 
-// Tambah data slot parki
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $lokasi = $_POST['lokasi'];
-    $conn->prepare("INSERT INTO parkir_slots (lokasi) VALUES (?)")->execute([$lokasi]);
-    header('Location: manage_slots.php');
-}
-
-// Edit data slot parkir
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit'])) {
-    $id = $_POST['id'];
-    $lokasi = $_POST['lokasi'];
-    $status = $_POST['status'];
-    $jenis = $_POST['jenis'];
-
-    $stmt = $conn->prepare("UPDATE parkir_slots SET lokasi = ?, status = ?, jenis = ? WHERE id = ?");
-    $stmt->execute([$lokasi, $status, $jenis, $id]);
-    
-    header('Location: manage_slots.php');
-    exit;
-}
-
-// Hapus data slot parkir
-if (isset($_GET['delete'])) {
-    $id = $_GET['delete'];
-    $stmt = $conn->prepare("DELETE FROM parkir_slots WHERE id = ?");
-    $stmt->execute([$id]);
-    header('Location: manage_slots.php');
-}
-// tambah data slot parkir
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['tambah'])) {
-    $lokasi = $_POST['lokasi'];
-    $status = $_POST['status']; // pastikan ini tidak kosong
-
-    if (!empty($lokasi) && !empty($status)) {
-        $stmt = $conn->prepare("INSERT INTO parkir_slots (lokasi, status) VALUES (?, ?)");
-        $stmt->execute([$lokasi, $status]);
-        header('Location: manage_slots.php');
-        exit;
-    } else {
-        echo "Data lokasi atau status kosong!";
-    }
-}
-// Ambil data dari database
-$query = $conn->query("SELECT * FROM parkir_slots");
-$currentPage = basename($_SERVER['PHP_SELF']);
 ?>
 
 <!DOCTYPE html>
@@ -159,16 +114,23 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                             <td>
                                                 <button 
                                                     class="btn btn-warning"
-                                                    onclick="editBooking(
-                                                        <?= $row['id'] ?>, 
-                                                        <?= $row['user_id'] ?>, 
-                                                        <?= $row['slot_id'] ?>,
-                                                        '<?= $row['waktu_booking'] ?>',
-                                                        '<?= $row['waktu_mulai'] ?>',
-                                                        '<?= $row['waktu_selesai'] ?>',
-                                                        '<?= $row['status'] ?>'
-                                                    )">Edit</button>
-                                                <a href="?delete=<?= $row['id'] ?>" class="btn btn-danger" onclick="return confirm('Yakin ingin menghapus?')">Hapus</a>
+                                                    onclick='editBooking(
+                                                        <?= json_encode($row["booking_id"]) ?>,
+                                                        <?= json_encode($row["user_id"]) ?>,
+                                                        <?= json_encode($row["slot_id"]) ?>,
+                                                        <?= json_encode($row["waktu_booking"]) ?>,
+                                                        <?= json_encode($row["waktu_mulai"]) ?>,
+                                                        <?= json_encode($row["waktu_selesai"]) ?>,
+                                                        <?= json_encode($row["status"]) ?>
+                                                    )'>
+                                                    Edit
+                                                </button>
+                                                <!-- Hapus -->
+                                               <a href="?delete=<?= $row['booking_id']; ?>" 
+                                                    class="btn btn-danger" 
+                                                    onclick="return confirm('Yakin ingin menghapus?')">
+                                                    Hapus
+                                                </a>
                                             </td>
                                         </tr>
                                         <?php endwhile; ?>

@@ -43,6 +43,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update'])) {
     header('Location: manage_bookings.php');
     exit;
 }
+// Hapus booking 
+if (isset($_GET['delete'])) {
+    $booking_id = $_GET['delete'];
+
+    // Hapus data booking berdasarkan booking_id
+    $stmt = $conn->prepare("DELETE FROM bookings WHERE booking_id = ?");
+    $stmt->execute([$booking_id]);
+
+    // Redirect agar halaman refresh dan data terupdate
+    header('Location: manage_bookings.php');
+    exit;
+}
 
 
 ?>
@@ -162,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update'])) {
                                                     Edit
                                                 </button>
                                                 <!-- Hapus -->
-                                               <a href="?delete=<?= $row['booking_id']; ?>" 
+                                                <a href="?delete=<?= $row['booking_id']; ?>" 
                                                     class="btn btn-danger" 
                                                     onclick="return confirm('Yakin ingin menghapus?')">
                                                     Hapus

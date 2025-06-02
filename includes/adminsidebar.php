@@ -33,8 +33,8 @@
             </li>
 
             <!-- Data Pengguna -->
-            <li class="nav-item <?= $currentPage == 'manage_users.php' ? 'active' : '' ?>">
-                <a class="nav-link" href="manage_users.php">
+            <li class="nav-item <?= $currentPage == 'data_pengguna.php' ? 'active' : '' ?>">
+                <a class="nav-link" href="data_pengguna.php">
                     <i class="fas fa-fw fa-users"></i>
                     <span>Data Pengguna</span>
                 </a>

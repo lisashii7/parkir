@@ -1,61 +1,38 @@
 <?php
 include '../config/db.php';
-//amil data dari database
-$query = $conn->query("
-    SELECT b.booking_id, b.user_id, u.username, b.slot_id, s.lokasi, b.waktu_booking, b.waktu_mulai, b.waktu_selesai, b.status, s.jenis
-    FROM bookings b
-    JOIN users u ON b.user_id = u.id
-    JOIN parkir_slots s ON b.slot_id = s.id
-");
-//tambah booking
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['tambah'])) {
-    $user_id = $_POST['user_id'];
-    $slot_id = $_POST['slot_id'];
-    $waktu_booking = $_POST['waktu_booking'];
-    $waktu_mulai = $_POST['waktu_mulai'];
-    $waktu_selesai = $_POST['waktu_selesai'];
-    $status = $_POST['status'];
+$query = $conn->query("SELECT id, username, role FROM users");
 
-    $stmt = $conn->prepare("UPDATE bookings 
-                            SET user_id = ?, slot_id = ?, waktu_booking = ?, waktu_mulai = ?, waktu_selesai = ?, status = ?
-                            WHERE booking_id = ?");
-    $stmt->execute([$user_id, $slot_id, $waktu_booking, $waktu_mulai, $waktu_selesai, $status, $booking_id]);
-
-    header('Location: manage_bookings.php');
-    exit;
-}
-//edit booking
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update'])) {
-    $booking_id = $_POST['booking_id'];
-    $user_id = $_POST['user_id'];
-    $slot_id = $_POST['slot_id'];
-    $waktu_booking = $_POST['waktu_booking'];
-    $waktu_mulai = $_POST['waktu_mulai'];
-    $waktu_selesai = $_POST['waktu_selesai'];
-    $status = $_POST['status'];
-
-    // Update data booking berdasarkan ID
-    $stmt = $conn->prepare("UPDATE bookings 
-                            SET user_id = ?, slot_id = ?, waktu_booking = ?, waktu_mulai = ?, waktu_selesai = ?, status = ?
-                            WHERE booking_id = ?");
-    $stmt->execute([$user_id, $slot_id, $waktu_booking, $waktu_mulai, $waktu_selesai, $status, $booking_id]);
-
-    header('Location: manage_bookings.php');
-    exit;
-}
-// Hapus booking 
+// Hapus pengguna
 if (isset($_GET['delete'])) {
-    $booking_id = $_GET['delete'];
-
-    // Hapus data booking berdasarkan booking_id
-    $stmt = $conn->prepare("DELETE FROM bookings WHERE booking_id = ?");
-    $stmt->execute([$booking_id]);
-
-    // Redirect agar halaman refresh dan data terupdate
-    header('Location: manage_bookings.php');
+    $id = $_GET['delete'];
+    $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+    $stmt->execute([$id]);
+    header('Location: data_pengguna.php');
     exit;
 }
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_user'])) {
+    $id = $_POST['id'];
+    $username = $_POST['username'];
+    $role = $_POST['role'];
 
+    $stmt = $conn->prepare("UPDATE users SET username = ?, role = ? WHERE id = ?");
+    $stmt->execute([$username, $role, $id]);
+
+    header("Location: data_pengguna.php");
+    exit;
+}
+// Tambah pengguna
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['tambah_user'])) {
+    $username = $_POST['tambah_username'];
+    $password = password_hash($_POST['tambah_password'], PASSWORD_DEFAULT);
+    $role = $_POST['tambah_role'];
+
+    $stmt = $conn->prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
+    $stmt->execute([$username, $password, $role]);
+
+    header("Location: data_pengguna.php");
+    exit;
+}
 
 ?>
 
@@ -80,6 +57,7 @@ if (isset($_GET['delete'])) {
 
     <!-- Custom styles for this template-->
     <link href="../css/sb-admin-2.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Custom styles for this page -->
     <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css" rel="stylesheet">
     <!-- jQuery & DataTables JS -->
@@ -112,23 +90,19 @@ if (isset($_GET['delete'])) {
                 <div class="container-fluid">
                     <h1 class="h3 mb-2 text-gray-800">Data Pengguna</h1>
                     <!-- Button trigger modal -->
-                    <button type="button" class="btn btn-success mb-2" data-toggle="modal" data-target="#modalTambahBooking">
+                   <!-- Tombol untuk membuka modal tambah -->
+                    <button type="button" class="btn btn-success mb-2" data-toggle="modal" data-target="#modalTambahUser">
                     Tambah
                     </button>
                     <div class="card shadow mb-4">
                         <div class="card-body">
                             <div class="table-responsive">
-                                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                                <table class="table table-bordered" id="dataTableUsers" width="100%" cellspacing="0">
                                     <thead>
                                         <tr>
                                             <th>No</th>
-                                            <th>User</th>
-                                            <th>Lokasi Slot</th>
-                                            <th>Jenis</th>
-                                            <th>Waktu Booking</th>
-                                            <th>Waktu Mulai</th>
-                                            <th>Waktu Selesai</th>
-                                            <th>Status</th>
+                                            <th>Username</th>
+                                            <th>Role</th> <!-- Tambahkan jika pakai sistem multi-role -->
                                             <th>Aksi</th>
                                         </tr>
                                     </thead>
@@ -137,46 +111,18 @@ if (isset($_GET['delete'])) {
                                         <tr>
                                             <td><?= $no++; ?></td>
                                             <td><?= htmlspecialchars($row['username']); ?></td>
-                                            <td><?= htmlspecialchars($row['lokasi']); ?></td>
+                                            <td><?= htmlspecialchars($row['role'] ?? 'User'); ?></td> <!-- fallback jika kolom role belum ada -->
                                             <td>
-                                                <?php 
-                                                if ($row['jenis'] === 'motor') echo "Motor";
-                                                elseif ($row['jenis'] === 'mobil') echo "Mobil";
-                                                elseif ($row['jenis'] === 'vip') echo "VIP";
-                                                else echo "-";
-                                                ?>
-                                            </td>
-                                            <td><?= htmlspecialchars($row['waktu_booking']); ?></td>
-                                            <td><?= htmlspecialchars($row['waktu_mulai']); ?></td>
-                                            <td><?= htmlspecialchars($row['waktu_selesai']); ?></td>
-                                            <td>
-                                                <?php 
-                                                if ($row['status'] === 'available') {
-                                                    echo '<span style="color: green;">Tersedia</span>';
-                                                } elseif ($row['status'] === 'booked') {
-                                                    echo '<span style="color: red;">Terbooking</span>';
-                                                } else {
-                                                    echo htmlspecialchars($row['status']);
-                                                }
-                                                ?>
-                                            </td>
-                                            <td>
-                                                <button class="btn btn-warning btn-sm btn-edit-booking"
-                                                    data-id="<?= $row['booking_id'] ?>"
-                                                    data-user="<?= $row['user_id'] ?>"
-                                                    data-slot="<?= $row['slot_id'] ?>"
-                                                    data-booking="<?= date('Y-m-d\TH:i', strtotime($row['waktu_booking'])) ?>"
-                                                    data-mulai="<?= date('Y-m-d\TH:i', strtotime($row['waktu_mulai'])) ?>"
-                                                    data-selesai="<?= date('Y-m-d\TH:i', strtotime($row['waktu_selesai'])) ?>"
-                                                    data-status="<?= $row['status'] ?>"
-                                                    data-toggle="modal"
-                                                    data-target="#modalEditBooking">
+                                                <!-- Edit -->
+                                                <button type="button"
+                                                    class="btn btn-warning btn-sm btn-edit-user"
+                                                    data-id="<?= $row['id']; ?>"
+                                                    data-username="<?= $row['username']; ?>"
+                                                    data-role="<?= $row['role']; ?>">
                                                     Edit
                                                 </button>
                                                 <!-- Hapus -->
-                                                <a href="?delete=<?= $row['booking_id']; ?>" 
-                                                    class="btn btn-danger" 
-                                                    onclick="return confirm('Yakin ingin menghapus?')">
+                                                <a href="?delete=<?= $row['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Yakin ingin menghapus pengguna ini?')">
                                                     Hapus
                                                 </a>
                                             </td>
@@ -186,7 +132,7 @@ if (isset($_GET['delete'])) {
                                 </table>
                             </div>
                         </div>
-                     </div>
+                    </div>
                 </div>
                 <!-- /.container-fluid -->
 
@@ -214,162 +160,90 @@ if (isset($_GET['delete'])) {
     // Ambil semua slot parkir
     $slots = $conn->query("SELECT id, lokasi, jenis FROM parkir_slots")->fetchAll(PDO::FETCH_ASSOC);
     ?>
-     <!-- Modal Tambah Booking -->
-    <div class="modal fade" id="modalTambahBooking" tabindex="-1" role="dialog" aria-labelledby="modalTambahBookingLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <form method="POST" action="manage_bookings.php">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modalTambahBookingLabel">Tambah Booking</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- user_id -->
-                        <div class="form-group">
-                            <label for="user_id">User</label>
-                            <select class="form-control" id="user_id" name="user_id" required>
-                                <option value="">-- Pilih User --</option>
-                                <?php foreach ($users as $user): ?>
-                                    <option value="<?= $user['id'] ?>">
-                                        <?= $user['username'] ?> (ID: <?= $user['id'] ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <!-- slot_id -->
-                       <div class="form-group">
-                            <label for="slot_id">Slot Parkir</label>
-                            <select class="form-control" id="slot_id" name="slot_id" required>
-                                <option value="">-- Pilih Slot --</option>
-                                <?php foreach ($slots as $slot): ?>
-                                    <option value="<?= $slot['id'] ?>">
-                                        <?= $slot['lokasi'] ?> (<?= ucfirst($slot['jenis']) ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        
-                        <!-- waktu_booking -->
-                        <div class="form-group">
-                            <label for="waktu_booking">Waktu Booking</label>
-                            <input type="datetime-local" class="form-control" id="waktu_booking" name="waktu_booking" required>
-                        </div>
-
-                        <!-- waktu_mulai -->
-                        <div class="form-group">
-                            <label for="waktu_mulai">Waktu Mulai</label>
-                            <input type="datetime-local" class="form-control" id="waktu_mulai" name="waktu_mulai" required>
-                        </div>
-
-                        <!-- waktu_selesai -->
-                        <div class="form-group">
-                            <label for="waktu_selesai">Waktu Selesai</label>
-                            <input type="datetime-local" class="form-control" id="waktu_selesai" name="waktu_selesai" required>
-                        </div>
-
-                        <!-- status -->
-                        <div class="form-group">
-                            <label for="status">Status</label>
-                            <select class="form-control" id="status" name="status" required>
-                                <option value="">-- Pilih Status --</option>
-                                <option value="pending">Pending</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- footer -->
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                        <button type="submit" name="tambah" class="btn btn-primary">Simpan</button>
-                    </div>
+    <!-- Modal Tambah Pengguna -->
+    <div class="modal fade" id="modalTambahUser" tabindex="-1" role="dialog" aria-labelledby="modalTambahUserLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <form method="POST" action="data_pengguna.php">
+        <div class="modal-content">
+            <div class="modal-header">
+            <h5 class="modal-title" id="modalTambahUserLabel">Tambah Pengguna</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
+                <span aria-hidden="true">&times;</span>
+            </button>
+            </div>
+            <div class="modal-body">
+            <!-- Username -->
+            <div class="form-group">
+                <label for="tambah_username">Username</label>
+                <input type="text" class="form-control" id="tambah_username" name="tambah_username" required>
+            </div>
+            <!-- Password -->
+          <!-- Password -->
+            <div class="form-group">
+            <label for="tambah_password">Password</label>
+            <div class="input-group">
+                <input type="password" class="form-control" id="tambah_password" name="tambah_password" required>
+                <div class="input-group-append">
+                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                    <i class="fas fa-eye"></i>
+                </button>
                 </div>
-            </form>
+            </div>
+            </div>
+            <!-- Role -->
+            <div class="form-group">
+                <label for="tambah_role">Role</label>
+                <select class="form-control" id="tambah_role" name="tambah_role" required>
+                <option value="admin">Admin</option>
+                <option value="user">User</option>
+                </select>
+            </div>
+            </div>
+            <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+            <button type="submit" name="tambah_user" class="btn btn-primary">Simpan</button>
+            </div>
         </div>
+        </form>
+    </div>
     </div>
     <!-- modal edit -->
-    <div class="modal fade" id="modalEditBooking" tabindex="-1" role="dialog" aria-labelledby="modalEditBookingLabel" aria-hidden="true">
+    <div class="modal fade" id="modalEditUser" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
-            <form method="POST" action="manage_bookings.php">
-                <input type="hidden" name="booking_id" id="edit_booking_id">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modalEditBookingLabel">Edit Booking</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- user_id -->
-                        <div class="form-group">
-                            <label for="edit_user_id">User</label>
-                            <select class="form-control" id="edit_user_id" name="user_id" required>
-                                <option value="">-- Pilih User --</option>
-                                <?php foreach ($users as $user): ?>
-                                    <option value="<?= $user['id'] ?>">
-                                        <?= $user['username'] ?> (ID: <?= $user['id'] ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <!-- slot_id -->
-                        <div class="form-group">
-                            <label for="edit_slot_id">Slot Parkir</label>
-                            <select class="form-control" id="edit_slot_id" name="slot_id" required>
-                                <option value="">-- Pilih Slot --</option>
-                                <?php foreach ($slots as $slot): ?>
-                                    <option value="<?= $slot['id'] ?>">
-                                        <?= $slot['lokasi'] ?> (<?= ucfirst($slot['jenis']) ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <!-- waktu_booking -->
-                        <div class="form-group">
-                            <label for="edit_waktu_booking">Waktu Booking</label>
-                            <input type="datetime-local" class="form-control" id="edit_waktu_booking" name="waktu_booking" required>
-                        </div>
-
-                        <!-- waktu_mulai -->
-                        <div class="form-group">
-                            <label for="edit_waktu_mulai">Waktu Mulai</label>
-                            <input type="datetime-local" class="form-control" id="edit_waktu_mulai" name="waktu_mulai" required>
-                        </div>
-
-                        <!-- waktu_selesai -->
-                        <div class="form-group">
-                            <label for="edit_waktu_selesai">Waktu Selesai</label>
-                            <input type="datetime-local" class="form-control" id="edit_waktu_selesai" name="waktu_selesai" required>
-                        </div>
-
-                        <!-- status -->
-                        <div class="form-group">
-                            <label for="edit_status">Status</label>
-                            <select class="form-control" id="edit_status" name="status" required>
-                                <option value="">-- Pilih Status --</option>
-                                <option value="pending">Pending</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- footer -->
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                        <button type="submit" name="update" class="btn btn-primary">Simpan Perubahan</button>
-                    </div>
+            <form method="POST" action="data_pengguna.php">
+            <div class="modal-content">
+                <div class="modal-header">
+                <h5 class="modal-title">Edit Pengguna</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
+                    <span aria-hidden="true">&times;</span>
+                </button>
                 </div>
+                <div class="modal-body">
+                <input type="hidden" id="edit_user_id" name="id">
+
+                <div class="form-group">
+                    <label for="edit_username">Username</label>
+                    <input type="text" class="form-control" id="edit_username" name="username" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_role">Role</label>
+                    <select class="form-control" id="edit_role" name="role" required>
+                    <option value="admin">Admin</option>
+                    <option value="user">User</option>
+                    </select>
+                </div>
+                </div>
+                <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                <button type="submit" name="update_user" class="btn btn-primary">Simpan Perubahan</button>
+                </div>
+            </div>
             </form>
         </div>
     </div>
-    
+
+
    <?php include '../includes/modallogout.php'; ?>
 
     <!-- Bootstrap core JavaScript-->
@@ -383,7 +257,6 @@ if (isset($_GET['delete'])) {
 
     <!-- Page level plugins -->
     <script src="../vendor/chart.js/Chart.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <!-- Page level custom scripts -->
     <!-- <script src="../js/demo/chart-area-demo.js"></script>
@@ -397,17 +270,6 @@ if (isset($_GET['delete'])) {
         });
     </script>
     <script>
-        function editSlot(id, lokasi, status, jenis) {
-            document.getElementById('edit-id').value = id;
-            document.getElementById('edit-lokasi').value = lokasi;
-            document.getElementById('edit-status').value = status;
-            document.getElementById('edit-jenis').value = jenis;
-
-            // Tampilkan modal edit
-            $('#modalEditSlot').modal('show');
-        }
-    </script>
-    <script>
     document.addEventListener('DOMContentLoaded', function () {
         $('#modalTambahBooking').on('shown.bs.modal', function () {
             const now = new Date();
@@ -419,18 +281,37 @@ if (isset($_GET['delete'])) {
     });
     </script>
     <script>
-        $(document).ready(function() {
-            $('.btn-edit-booking').click(function() {
-                $('#edit_booking_id').val($(this).data('id'));
-                $('#edit_user_id').val($(this).data('user'));
-                $('#edit_slot_id').val($(this).data('slot'));
-                $('#edit_waktu_booking').val($(this).data('booking'));
-                $('#edit_waktu_mulai').val($(this).data('mulai'));
-                $('#edit_waktu_selesai').val($(this).data('selesai'));
-                $('#edit_status').val($(this).data('status'));
-            });
+    $(document).ready(function() {
+        $('.btn-edit-user').click(function() {
+            let id = $(this).data('id');
+            let username = $(this).data('username');
+            let role = $(this).data('role');
+
+            $('#edit_user_id').val(id);
+            $('#edit_username').val(username);
+            $('#edit_role').val(role);
+
+            $('#modalEditUser').modal('show');
         });
+    });
     </script>
+    <script>
+    document.getElementById('togglePassword').addEventListener('click', function () {
+        const passwordField = document.getElementById('tambah_password');
+        const icon = this.querySelector('i');
+
+        if (passwordField.type === 'password') {
+        passwordField.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+        } else {
+        passwordField.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+        }
+    });
+    </script>
+
 </body>
 
 </html>

@@ -3,13 +3,21 @@ session_start();
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'user') {
     header('Location: ../auth/login.php');
     exit;
+if ($_SESSION['user']['role'] === 'user') {
+    include '../includes/usersidebar.php';
+} elseif ($_SESSION['user']['role'] === 'admin') {
+    include '../includes/adminsidebar.php';
 }
+}
+
+$currentPage = basename($_SERVER['PHP_SELF']); // Menetapkan halaman saat ini
 
 include '../config/db.php';
 
 // Ambil slot parkir yang tersedia
 $slots = $conn->query("SELECT * FROM parkir_slots WHERE status = 'available' ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -41,8 +49,7 @@ $slots = $conn->query("SELECT * FROM parkir_slots WHERE status = 'available' ORD
     <div id="wrapper">
 
         <!-- Sidebar -->
-         <?php include '../includes/usersidebar.php'; ?>
-
+        <?php include '../includes/usersidebar.php'; ?>
         <!-- End of Sidebar -->
 
         <!-- Content Wrapper -->

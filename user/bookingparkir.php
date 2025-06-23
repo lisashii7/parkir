@@ -231,7 +231,16 @@ $slots = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <?php endforeach; ?>
                             </select>
                         </div>
-
+                        <!-- Jenis Kendaraan -->
+                        <div class="form-group">
+                            <label for="jenis">Jenis Kendaraan</label>
+                            <input type="text" class="form-control" id="jenis" readonly>
+                        </div>
+                        <!-- Harga -->
+                        <div class="form-group">
+                            <label for="harga">Harga</label>
+                            <input type="text" class="form-control" id="harga" readonly>
+                        </div>
                         <!-- Waktu Booking -->
                         <div class="form-group">
                             <label for="waktu_booking">Waktu Booking</label>
@@ -330,6 +339,45 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('waktu_booking').value = datetimeLocal;
 });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const slotSelect = document.getElementById('slot_id');
+    const jenisField = document.getElementById('jenis');
+    const hargaField = document.getElementById('harga');
+
+    slotSelect.addEventListener('change', function () {
+        const selectedOption = slotSelect.options[slotSelect.selectedIndex].text;
+        const jenisField = document.getElementById('jenis');
+        const hargaField = document.getElementById('harga');
+        const hiddenJenis = document.getElementById('hidden_jenis');
+        const hiddenHarga = document.getElementById('hidden_harga');
+
+        let jenis = '';
+        let harga = 0;
+
+        // Cek isi teks full seperti "Parkir A1 (mobil)"
+        if (selectedOption.includes('A')) {
+            jenis = 'Mobil';
+            harga = 10000;
+        } else if (selectedOption.includes('B')) {
+            jenis = 'Motor';
+            harga = 5000;
+        } else if (selectedOption.toUpperCase().includes('VIP')) {
+            jenis = 'Mobil VIP';
+            harga = 50000;
+        }
+
+        jenisField.value = jenis;
+        hargaField.value = 'Rp ' + harga.toLocaleString('id-ID');
+
+        // Jika menyimpan ke database (hidden input)
+        if (hiddenJenis) hiddenJenis.value = jenis;
+        if (hiddenHarga) hiddenHarga.value = harga;
+    });
+
+});
+</script>
+
 </body>
 
 </html>

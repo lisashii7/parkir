@@ -73,7 +73,8 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                             <th>No</th>
                                             <th>Lokasi</th>
                                             <th>Status</th>
-                                             <th>Jenis</th>
+                                            <th>Jenis</th>
+                                            <th>Harga</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -96,6 +97,19 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                                 <?php else: ?>
                                                     <span style="color: red;">Terbooking</span>
                                                 <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php 
+                                                    if ($row['jenis'] === 'motor') {
+                                                        echo "Rp " . number_format(5000, 0, ',', '.');
+                                                    } elseif ($row['jenis'] === 'mobil') {
+                                                        echo "Rp " . number_format(10000, 0, ',', '.');
+                                                    } elseif ($row['jenis'] === 'vip') {
+                                                        echo "Rp " . number_format(50000, 0, ',', '.');
+                                                    } else {
+                                                        echo "-";
+                                                    }
+                                                ?>
                                             </td>
                                         </tr>
                                         <?php endwhile; ?>

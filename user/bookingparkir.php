@@ -1,4 +1,5 @@
 <?php
+session_start();
 include '../config/db.php';
 //amil data dari database
 $query = $conn->query("
@@ -16,33 +17,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['tambah'])) {
     $waktu_selesai = $_POST['waktu_selesai'];
     $status = $_POST['status'];
 
-    $stmt = $conn->prepare("UPDATE bookings 
-                            SET user_id = ?, slot_id = ?, waktu_booking = ?, waktu_mulai = ?, waktu_selesai = ?, status = ?
-                            WHERE booking_id = ?");
-    $stmt->execute([$user_id, $slot_id, $waktu_booking, $waktu_mulai, $waktu_selesai, $status, $booking_id]);
+    // INSERT untuk tambah data baru
+    $stmt = $conn->prepare("INSERT INTO bookings 
+        (user_id, slot_id, waktu_booking, waktu_mulai, waktu_selesai, status)
+        VALUES (?, ?, ?, ?, ?, ?)");
+    
+    $stmt->execute([$user_id, $slot_id, $waktu_booking, $waktu_mulai, $waktu_selesai, $status]);
 
-    header('Location: manage_bookings.php');
+    header('Location: pembayaran.php?booking_id=' . $booking_id);
     exit;
 }
-//edit booking
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update'])) {
-    $booking_id = $_POST['booking_id'];
-    $user_id = $_POST['user_id'];
-    $slot_id = $_POST['slot_id'];
-    $waktu_booking = $_POST['waktu_booking'];
-    $waktu_mulai = $_POST['waktu_mulai'];
-    $waktu_selesai = $_POST['waktu_selesai'];
-    $status = $_POST['status'];
 
-    // Update data booking berdasarkan ID
-    $stmt = $conn->prepare("UPDATE bookings 
-                            SET user_id = ?, slot_id = ?, waktu_booking = ?, waktu_mulai = ?, waktu_selesai = ?, status = ?
-                            WHERE booking_id = ?");
-    $stmt->execute([$user_id, $slot_id, $waktu_booking, $waktu_mulai, $waktu_selesai, $status, $booking_id]);
-
-    header('Location: manage_bookings.php');
-    exit;
-}
 // Hapus booking 
 if (isset($_GET['delete'])) {
     $booking_id = $_GET['delete'];
@@ -52,7 +37,7 @@ if (isset($_GET['delete'])) {
     $stmt->execute([$booking_id]);
 
     // Redirect agar halaman refresh dan data terupdate
-    header('Location: manage_bookings.php');
+    header('Location: bookingparkir.php');
     exit;
 }
 
@@ -64,13 +49,24 @@ $query = $conn->query("
     JOIN parkir_slots s ON b.slot_id = s.id
     ORDER BY b.booking_id DESC
 ");
-$slots = $conn->query("
-    SELECT * FROM parkir_slots 
-    WHERE id NOT IN (
-        SELECT slot_id FROM bookings 
-        WHERE status IN ('pending', 'dibayar')
-    )
-")->fetchAll(PDO::FETCH_ASSOC);
+// $slots = $conn->query("
+//     SELECT * FROM parkir_slots 
+//     WHERE id NOT IN (
+//         SELECT slot_id FROM bookings 
+//         WHERE status IN ('pending', 'dibayar')
+//     )
+// ")->fetchAll(PDO::FETCH_ASSOC);
+$stmt = $conn->query("
+    SELECT s.* 
+    FROM parkir_slots s
+    LEFT JOIN bookings b 
+        ON s.id = b.slot_id 
+        AND b.status IN ('pending', 'dibayar')
+    WHERE b.slot_id IS NULL
+");
+
+$slots = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 
 ?>
 
@@ -144,7 +140,6 @@ $slots = $conn->query("
                                             <th>Waktu Mulai</th>
                                             <th>Waktu Selesai</th>
                                             <th>Status</th>
-                                            <th>Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -174,20 +169,6 @@ $slots = $conn->query("
                                                     echo htmlspecialchars($row['status']);
                                                 }
                                                 ?>
-                                            </td>
-                                            <td>
-                                                <button class="btn btn-warning btn-sm btn-edit-booking"
-                                                    data-id="<?= $row['booking_id'] ?>"
-                                                    data-user="<?= htmlspecialchars($row['username']) ?>"
-                                                    data-slot="<?= $row['slot_id'] ?>"
-                                                    data-booking="<?= date('Y-m-d\TH:i', strtotime($row['waktu_booking'])) ?>"
-                                                    data-mulai="<?= date('Y-m-d\TH:i', strtotime($row['waktu_mulai'])) ?>"
-                                                    data-selesai="<?= date('Y-m-d\TH:i', strtotime($row['waktu_selesai'])) ?>"
-                                                    data-status="<?= $row['status'] ?>"
-                                                    data-toggle="modal"
-                                                    data-target="#modalEditBooking">
-                                                    Edit
-                                                </button>
                                             </td>
                                         </tr>
                                         <?php endwhile; ?>
@@ -224,10 +205,9 @@ $slots = $conn->query("
     $slots = $conn->query("SELECT id, lokasi, jenis FROM parkir_slots")->fetchAll(PDO::FETCH_ASSOC);
     ?>
      <!-- Modal Tambah Booking -->
-      <!-- Modal Tambah Booking -->
     <div class="modal fade" id="modalTambahBooking" tabindex="-1" role="dialog" aria-labelledby="modalTambahBookingLabel" aria-hidden="true">
         <div class="modal-dialog" role="document">
-            <form method="POST" action="manage_bookings.php">
+            <form method="POST" action="bookingparkir.php">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title" id="modalTambahBookingLabel">Tambah Booking</h5>
@@ -245,7 +225,9 @@ $slots = $conn->query("
                             <select class="form-control" id="slot_id" name="slot_id" required>
                                 <option value="">-- Pilih Slot --</option>
                                 <?php foreach ($slots as $slot): ?>
-                                    <option value="<?= $slot['id'] ?>"><?= $slot['lokasi'] ?> (<?= ucfirst($slot['jenis']) ?>)</option>
+                                    <option value="<?= $slot['id'] ?>">
+                                        <?= $slot['lokasi'] ?> (<?= ucfirst($slot['jenis']) ?>)
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -253,7 +235,7 @@ $slots = $conn->query("
                         <!-- Waktu Booking -->
                         <div class="form-group">
                             <label for="waktu_booking">Waktu Booking</label>
-                            <input type="datetime-local" class="form-control" id="waktu_booking" name="waktu_booking" required>
+                            <input type="datetime-local" class="form-control" id="waktu_booking" name="waktu_booking" readonly>
                         </div>
 
                         <!-- Waktu Mulai -->
@@ -274,84 +256,6 @@ $slots = $conn->query("
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
                         <button type="submit" name="tambah" class="btn btn-primary">Simpan</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-    <!-- modal edit -->
-    <div class="modal fade" id="modalEditBooking" tabindex="-1" role="dialog" aria-labelledby="modalEditBookingLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <form method="POST" action="manage_bookings.php">
-                <input type="hidden" name="booking_id" id="edit_booking_id">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modalEditBookingLabel">Edit Booking</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- user_id -->
-                        <div class="form-group">
-                            <label for="edit_user_id">User</label>
-                            <select class="form-control" id="edit_user_id" name="user_id" required>
-                                <option value="">-- Pilih User --</option>
-                                <?php foreach ($users as $user): ?>
-                                    <option value="<?= $user['id'] ?>">
-                                        <?= $user['username'] ?> (ID: <?= $user['id'] ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <!-- slot_id -->
-                        <div class="form-group">
-                            <label for="edit_slot_id">Slot Parkir</label>
-                            <select class="form-control" id="edit_slot_id" name="slot_id" required>
-                                <option value="">-- Pilih Slot --</option>
-                                <?php foreach ($slots as $slot): ?>
-                                    <option value="<?= $slot['id'] ?>">
-                                        <?= $slot['lokasi'] ?> (<?= ucfirst($slot['jenis']) ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <!-- waktu_booking -->
-                        <div class="form-group">
-                            <label for="edit_waktu_booking">Waktu Booking</label>
-                           <input type="hidden" id="waktu_booking" name="waktu_booking">
-                        </div>
-
-                        <!-- waktu_mulai -->
-                        <div class="form-group">
-                            <label for="edit_waktu_mulai">Waktu Mulai</label>
-                            <input type="datetime-local" class="form-control" id="edit_waktu_mulai" name="waktu_mulai" required>
-                        </div>
-
-                        <!-- waktu_selesai -->
-                        <div class="form-group">
-                            <label for="edit_waktu_selesai">Waktu Selesai</label>
-                            <input type="datetime-local" class="form-control" id="edit_waktu_selesai" name="waktu_selesai" required>
-                        </div>
-
-                        <!-- status -->
-                        <div class="form-group">
-                            <label for="edit_status">Status</label>
-                            <select class="form-control" id="edit_status" name="status" required>
-                                <option value="">-- Pilih Status --</option>
-                                <option value="pending">Pending</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- footer -->
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                        <button type="submit" name="update" class="btn btn-primary">Simpan Perubahan</button>
                     </div>
                 </div>
             </form>

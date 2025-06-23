@@ -1,14 +1,98 @@
 <?php
-include '../config/db.php';
 session_start();
-if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'user') {
-    header('Location: ../auth/login.php');
+include '../config/db.php';
+//amil data dari database
+$query = $conn->query("
+    SELECT b.booking_id, b.user_id, u.username, b.slot_id, s.lokasi, b.waktu_booking, b.waktu_mulai, b.waktu_selesai, b.status, s.jenis
+    FROM bookings b
+    JOIN users u ON b.user_id = u.id
+    JOIN parkir_slots s ON b.slot_id = s.id
+");
+
+$query = $conn->query("
+    SELECT b.booking_id, b.user_id, u.username, b.slot_id, s.lokasi, s.jenis,
+           b.waktu_booking, b.waktu_mulai, b.waktu_selesai, b.status
+    FROM bookings b
+    JOIN users u ON b.user_id = u.id
+    JOIN parkir_slots s ON b.slot_id = s.id
+    ORDER BY b.booking_id DESC
+");
+// $slots = $conn->query("
+//     SELECT * FROM parkir_slots 
+//     WHERE id NOT IN (
+//         SELECT slot_id FROM bookings 
+//         WHERE status IN ('pending', 'dibayar')
+//     )
+// ")->fetchAll(PDO::FETCH_ASSOC);
+$stmt = $conn->query("
+    SELECT s.* 
+    FROM parkir_slots s
+    LEFT JOIN bookings b 
+        ON s.id = b.slot_id 
+        AND b.status IN ('pending', 'dibayar')
+    WHERE b.slot_id IS NULL
+");
+
+$slots = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Proses kirim bukti pembayaran
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['kirim_bukti'])) {
+    $booking_id = $_POST['booking_id'];
+    $metode_pembayaran = $_POST['metode']; // sesuai nama kolom di DB
+
+    // Validasi upload
+    if (isset($_FILES['bukti_pembayaran']) && $_FILES['bukti_pembayaran']['error'] === UPLOAD_ERR_OK) {
+        $fileTmpPath = $_FILES['bukti_pembayaran']['tmp_name'];
+        $fileName = $_FILES['bukti_pembayaran']['name'];
+        $fileExtension = pathinfo($fileName, PATHINFO_EXTENSION);
+        $newFileName = 'bukti_' . time() . '_' . $booking_id . '.' . $fileExtension;
+
+        $uploadDir = '../uploads/';
+        $destPath = $uploadDir . $newFileName;
+
+        // Buat folder jika belum ada
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+
+        // Proses upload file
+        if (move_uploaded_file($fileTmpPath, $destPath)) {
+            // 1. Update status booking ke 'dibayar'
+            $stmt = $conn->prepare("UPDATE bookings SET status = 'dibayar' WHERE booking_id = ?");
+            $stmt->execute([$booking_id]);
+
+            // 2. Insert data ke tabel pembayaran
+            $stmt = $conn->prepare("
+                INSERT INTO pembayaran (
+                    booking_id,
+                    metode_pembayaran,
+                    bukti_pembayaran,
+                    waktu_pembayaran,
+                    status
+                ) VALUES (?, ?, ?, NOW(), 'menunggu_verifikasi')
+            ");
+            $stmt->execute([$booking_id, $metode_pembayaran, $newFileName]);
+
+            // 3. Update status slot menjadi 'booked'
+            $stmt = $conn->prepare("
+                UPDATE parkir_slots 
+                SET status = 'booked' 
+                WHERE id = (SELECT slot_id FROM bookings WHERE booking_id = ?)
+            ");
+            $stmt->execute([$booking_id]);
+
+            $_SESSION['sukses'] = "Bukti pembayaran berhasil dikirim.";
+        } else {
+            $_SESSION['error'] = "Gagal mengupload bukti pembayaran.";
+        }
+    } else {
+        $_SESSION['error'] = "File tidak valid atau gagal upload.";
+    }
+
+    header('Location: pembayaran.php');
     exit;
 }
 
-// Ambil data dari database
-$query = $conn->query("SELECT * FROM parkir_slots");
-$currentPage = basename($_SERVER['PHP_SELF']);
 ?>
 
 <!DOCTYPE html>
@@ -22,7 +106,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Slot Parkir</title>
+    <title>Data Booking</title>
 
     <!-- Custom fonts for this template-->
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
@@ -62,7 +146,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                 <!-- Begin Page Content -->
                 <div class="container-fluid">
-                    <h1 class="h3 mb-2 text-gray-800">Slot Parkir</h1>
+                    <h1 class="h3 mb-2 text-gray-800">Pembayaran</h1>
                     <!-- Button trigger modal -->
                     <div class="card shadow mb-4">
                         <div class="card-body">
@@ -71,32 +155,58 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                     <thead>
                                         <tr>
                                             <th>No</th>
-                                            <th>Lokasi</th>
+                                            <th>User</th>
+                                            <th>Lokasi Slot</th>
+                                            <th>Jenis</th>
+                                            <th>Waktu Booking</th>
+                                            <th>Waktu Mulai</th>
+                                            <th>Waktu Selesai</th>
                                             <th>Status</th>
-                                             <th>Jenis</th>
+                                            <th>Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <?php $no = 1; while($row = $query->fetch(PDO::FETCH_ASSOC)) : ?>
                                         <tr>
                                             <td><?= $no++; ?></td>
+                                            <td><?= htmlspecialchars($row['username']); ?></td>
                                             <td><?= htmlspecialchars($row['lokasi']); ?></td>
-                                             <td>
-                                                <?php if ($row['jenis'] === 'motor'): ?>
-                                                    <span>Motor</span>
-                                                <?php elseif ($row['jenis'] === 'mobil'): ?>
-                                                    <span>Mobil</span>
-                                                <?php else: ?>
-                                                    <span>VIP</span>
-                                                <?php endif; ?>
-                                            </td>
                                             <td>
-                                                <?php if ($row['status'] === 'available'): ?>
-                                                    <span style="color: green;">Tersedia</span>
-                                                <?php else: ?>
-                                                    <span style="color: red;">Terbooking</span>
-                                                <?php endif; ?>
+                                                <?php 
+                                                if ($row['jenis'] === 'motor') echo "Motor";
+                                                elseif ($row['jenis'] === 'mobil') echo "Mobil";
+                                                elseif ($row['jenis'] === 'vip') echo "VIP";
+                                                else echo "-";
+                                                ?>
                                             </td>
+                                            <td><?= htmlspecialchars($row['waktu_booking']); ?></td>
+                                            <td><?= htmlspecialchars($row['waktu_mulai']); ?></td>
+                                            <td><?= htmlspecialchars($row['waktu_selesai']); ?></td>
+                                            <td>
+                                                <?php 
+                                                if ($row['status'] === 'available') {
+                                                    echo '<span style="color: green;">Tersedia</span>';
+                                                } elseif ($row['status'] === 'booked') {
+                                                    echo '<span style="color: red;">Terbooking</span>';
+                                                } else {
+                                                    echo htmlspecialchars($row['status']);
+                                                }
+                                                ?>
+                                            </td>
+                                          <td>
+                                            <?php if ($row['status'] === 'pending') : ?>
+                                                <button class="btn btn-success btn-sm btn-bayar"
+                                                        data-booking-id="<?= $row['booking_id'] ?>"
+                                                        data-toggle="modal"
+                                                        data-target="#modalBayar">
+                                                    Bayar
+                                                </button>
+                                            <?php else: ?>
+                                                <button class="btn btn-secondary btn-sm" disabled>
+                                                    Sudah Bayar
+                                                </button>
+                                            <?php endif; ?>
+                                        </td>
                                         </tr>
                                         <?php endwhile; ?>
                                     </tbody>
@@ -125,92 +235,70 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <i class="fas fa-angle-up"></i>
     </a>
     <!-- Modal tambah -->
-     <div class="modal fade" id="modalTambahSlot" tabindex="-1" role="dialog" aria-labelledby="modalTambahSlotLabel" aria-hidden="true">
+     <?php
+    // Ambil semua user
+    $users = $conn->query("SELECT id, username FROM users")->fetchAll(PDO::FETCH_ASSOC);
+    // Ambil semua slot parkir
+    $slots = $conn->query("SELECT id, lokasi, jenis FROM parkir_slots")->fetchAll(PDO::FETCH_ASSOC);
+    ?>
+    <!-- Modal Pembayaran -->
+    <div class="modal fade" id="modalBayar" tabindex="-1" role="dialog" aria-labelledby="modalBayarLabel" aria-hidden="true">
         <div class="modal-dialog" role="document">
-            <form method="POST" action="manage_slots.php">
+            <form method="POST" action="pembayaran.php" enctype="multipart/form-data">
+                <input type="hidden" name="booking_id" id="booking_id_bayar">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="modalTambahSlotLabel">Tambah Slot Parkir</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
-                            <span aria-hidden="true">&times;</span>
+                        <h5 class="modal-title">Pembayaran</h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
                         </button>
                     </div>
                     <div class="modal-body">
-                        <div class="form-group">
-                            <label for="lokasi">Lokasi</label>
-                            <input type="text" class="form-control" id="lokasi" name="lokasi" required>
-                        </div>
-                        <div class="form-group
-                            <label for="jenis">Jenis</label>
-                            <select class="form-control" id="jenis" name="jenis" required>
-                                <option value="">-- Pilih Jenis --</option>
-                                <option value="motor">Motor</option>
-                                <option value="mobil">Mobil</option>
-                                <option value="vip">VIP</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="status">Status</label>
-                            <select class="form-control" id="status" name="status" required>
-                                <option value="">-- Pilih Status --</option>
-                                <option value="Tersedia">Tersedia</option>
-                                <option value="Terbooking">Terbooking</option>
-                            </select>
+
+                    <div class="form-group">
+                        <label for="metode">Metode Pembayaran</label>
+                        <select name="metode" id="metode" class="form-control" required>
+                            <option value="">-- Pilih Metode --</option>
+                            <option value="qris">QRIS</option>
+                            <option value="transfer_bank">Transfer Bank</option>
+                            <option value="e_wallet">Dompet Digital</option>
+                        </select>
+                    </div>
+
+                    <!-- Detail QRIS -->
+                    <div class="form-group metode-detail" id="qris_detail" style="display: none;">
+                        <label>Scan QRIS:</label><br>
+                        <div class="text-center">
+                            <img src="../img/frame.png" alt="QRIS" width="200">
                         </div>
                     </div>
+
+                    <!-- Detail Transfer Bank -->
+                    <div class="form-group metode-detail" id="bank_detail" style="display: none;">
+                        <label>Nomor Rekening:</label>
+                        <p>1234567890 (BCA - a.n. PT Parkir Online)</p>
+                    </div>
+
+                    <!-- Detail eWallet -->
+                    <div class="form-group metode-detail" id="ewallet_detail" style="display: none;">
+                        <label>Nomor e-Wallet:</label>
+                        <p>0857-1234-5678 (Dana / OVO / GoPay)</p>
+                    </div>
+
+                    <!-- Upload Bukti -->
+                    <div class="form-group">
+                        <label for="bukti_pembayaran">Upload Bukti Pembayaran</label>
+                        <input type="file" name="bukti_pembayaran" class="form-control-file" required accept="image/*">
+                    </div>
+                    </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                        <button type="submit" name="tambah" class="btn btn-primary">Simpan</button>
+                        <button type="submit" name="kirim_bukti" class="btn btn-primary">Kirim Bukti</button>
                     </div>
                 </div>
             </form>
         </div>
     </div>
-    <!-- Logout Modal-->
-     <!-- modal edit -->
-      <div class="modal fade" id="modalEditSlot" tabindex="-1" role="dialog" aria-labelledby="modalEditSlotLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <form method="POST" action="manage_slots.php">
-            <div class="modal-content">
-                <div class="modal-header">
-                <h5 class="modal-title" id="modalEditSlotLabel">Edit Slot Parkir</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-                </div>
-                <div class="modal-body">
-                <input type="hidden" id="edit-id" name="id">
-                <div class="form-group">
-                    <label for="edit-lokasi">Lokasi</label>
-                    <input type="text" class="form-control" id="edit-lokasi" name="lokasi" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-jenis">Jenis</label>
-                    <select class="form-control" id="edit-jenis" name="jenis" required>
-                        <option value="">-- Pilih Jenis --</option>
-                        <option value="motor">Motor</option>
-                        <option value="mobil">Mobil</option>
-                        <option value="vip">VIP</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="edit-status">Status</label>
-                    <select class="form-control" id="edit-status" name="status" required>
-                        <option value="">-- Pilih Status --</option>
-                        <option value="available">Tersedia</option>
-                        <option value="booked">Terbooking</option>
-                    </select>
-                </div>
-                </div>
-                <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                <button type="submit" name="edit" class="btn btn-primary">Update</button>
-                </div>
-            </div>
-            </form>
-        </div>
-        </div>
-
+    
    <?php include '../includes/modallogout.php'; ?>
 
     <!-- Bootstrap core JavaScript-->
@@ -224,6 +312,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
     <!-- Page level plugins -->
     <script src="../vendor/chart.js/Chart.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <!-- Page level custom scripts -->
     <!-- <script src="../js/demo/chart-area-demo.js"></script>
@@ -237,15 +326,34 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         });
     </script>
     <script>
-        function editSlot(id, lokasi, status, jenis) {
-            document.getElementById('edit-id').value = id;
-            document.getElementById('edit-lokasi').value = lokasi;
-            document.getElementById('edit-status').value = status;
-            document.getElementById('edit-jenis').value = jenis;
+    $(document).ready(function () {
+        $('.btn-bayar').on('click', function () {
+            const bookingId = $(this).data('booking-id');
+            $('#booking_id_bayar').val(bookingId);
+        });
+    });
+    </script>
 
-            // Tampilkan modal edit
-            $('#modalEditSlot').modal('show');
-        }
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Tampilkan detail metode pembayaran sesuai pilihan
+            document.getElementById('metode').addEventListener('change', function () {
+                const metode = this.value;
+
+                // Sembunyikan semua metode detail
+                document.querySelectorAll('.metode-detail').forEach(el => {
+                    el.style.display = 'none';
+                });
+
+                if (metode === 'qris') {
+                    document.getElementById('qris_detail').style.display = 'block';
+                } else if (metode === 'transfer_bank') {
+                    document.getElementById('bank_detail').style.display = 'block';
+                } else if (metode === 'e_wallet') {
+                    document.getElementById('ewallet_detail').style.display = 'block';
+                }
+            });
+        });
     </script>
 </body>
 

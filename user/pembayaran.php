@@ -1,6 +1,24 @@
 <?php
 session_start();
 include '../config/db.php';
+// Cancel otomatis booking yang belum dibayar dalam 60 menit
+$conn->prepare("
+    UPDATE bookings 
+    SET status = 'dibatalkan' 
+    WHERE status = 'pending' 
+      AND waktu_booking <= DATE_SUB(NOW(), INTERVAL 60 MINUTE)
+")->execute();
+// 2. Update status slot menjadi available jika booking dibatalkan
+$conn->prepare("
+    UPDATE parkir_slots 
+    SET status = 'available' 
+    WHERE id IN (
+        SELECT slot_id 
+        FROM bookings 
+        WHERE status = 'dibatalkan' 
+          AND waktu_booking <= DATE_SUB(NOW(), INTERVAL 60 MINUTE)
+    )
+")->execute();
 //amil data dari database
 $query = $conn->query("
     SELECT b.booking_id, b.user_id, u.username, b.slot_id, s.lokasi, b.waktu_booking, b.waktu_mulai, b.waktu_selesai, b.status, s.jenis
